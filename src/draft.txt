@@ -1,0 +1,189 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+
+public class Board extends JPanel {
+    private boolean ai1;
+    private boolean ai2;
+    private Cell[][] cells;
+    private Grid[][] panels;
+    private Game game;
+
+    private Font myFont = new Font(Font.SANS_SERIF, Font.BOLD, 60);
+    private Font largeFont = new Font(Font.SANS_SERIF, Font.BOLD, 180);
+
+    public Board(boolean ai1, boolean ai2) {
+        this.ai1 = ai1;
+        this.ai2 = ai2;
+        if (ai1) {
+
+        }
+
+        setLayout(new GridLayout(3, 3));
+        cells = new Cell[9][9];
+        panels = new Grid[3][3];
+        for (int i=0; i<3; i++) {
+            for (int j=0; j<3; j++) {
+                panels[i][j] = new Grid();
+                add(panels[i][j]);
+            }
+        }
+        game = new Game();
+        for (int i=0; i<9; i++) {
+            int r = i / 3;
+            for (int j=0; j<9; j++) {
+                int c = j / 3;
+                cells[i][j] = new Cell(i, j);
+                panels[r][c].add(cells[i][j]);
+            }
+        }
+
+
+    }
+
+    // Class for a cell
+    class Cell extends JButton {
+        public Cell(int r, int c) {
+            addActionListener(new ButtonListener(r, c));
+            setFont(myFont);
+        }
+    }
+
+    // Class for a 3 by 3 grid of cells
+    class Grid extends JPanel {
+        public Grid() {
+            setLayout(new GridLayout(3, 3));
+            setBorder(BorderFactory.createMatteBorder(1,1,1,1,Color.BLACK));
+        }
+    }
+
+    class FinishedGrid extends JButton {
+        public FinishedGrid(String s) {
+            setFont(largeFont);
+            setText(s);
+            setBorder(BorderFactory.createMatteBorder(1,1,1,1,Color.BLACK));
+        }
+    }
+
+    class ButtonListener implements ActionListener {
+        private int x;
+        private int y;
+        public ButtonListener(int r, int c) {
+            x = r;
+            y = c;
+        }
+        public void actionPerformed(ActionEvent e) {
+            if (((game.getNextPlayer() == 1 && !ai1) || (game.getNextPlayer() == 2 && !ai2)) && game.isLegalMove(x, y)) {
+                cells[x][y].setText(game.nextString());
+                game.move(x, y);
+                int r = x / 3;
+                int c = y / 3;
+                int res = game.result[r][c];
+                if (res != 0) {
+                    remove(r*3+c);
+                    if (res == 1) {
+                        add(new FinishedGrid("X"), r*3+c);
+                    } else {
+                        add(new FinishedGrid("O"), r*3+c);
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+public class Monitor {
+    private Pos slot;
+    public Monitor() {
+        slot = null;
+    }
+
+    public synchronized void setMove(Pos pos) {
+        System.out.println("setting move");
+        while (slot != null) {
+            try {
+                wait();
+            } catch (InterruptedException e) {}
+        }
+        slot = pos;
+        notifyAll();
+    }
+
+    public synchronized Pos getMove() {
+        System.out.println("getting move");
+        while (slot == null) {
+            try {
+                wait();
+            } catch (InterruptedException e) {}
+        }
+        Pos p = slot;
+        slot = null;
+        notifyAll();
+        return p;
+    }
+}
+import java.util.LinkedList;
+import java.util.Random;
+public class AI implements Runnable{
+    private int time = 5;
+    private Game game;
+    private int player;
+    private Random random = new Random();
+    private Monitor slot;
+    public AI(int player, Monitor slot) {
+        this.player = player;
+        this.slot = slot;
+        game = new Game();
+    }
+    public void run() {
+        if (player == 1) {
+            LinkedList<Pos> poss = game.getLegalMoves();
+            Pos next = poss.get(random.nextInt(poss.size()));
+            slot.setMove1(next);
+            game.move(next.x, next.y);
+            while (true) {
+                Pos pos = slot.getMove2();
+                game.move(pos.x, pos.y);
+                poss = game.getLegalMoves();
+                System.out.println("AI posssible moves:");
+                for (Pos p : poss) {
+                    System.out.printf("%d,%d ", p.x, p.y);
+                }
+                if (poss.isEmpty()) {
+                    break;
+                } else {
+                    next = poss.get(random.nextInt(poss.size()));
+                    slot.setMove1(next);
+                    game.move(next.x, next.y);
+                    poss = game.getLegalMoves();
+                    if (poss.isEmpty()) {
+                        break;
+                    }
+                }
+            }
+        } else if (player == 2) {
+            while (true) {
+                Pos pos = slot.getMove1();
+                game.move(pos.x, pos.y);
+                LinkedList<Pos> poss = game.getLegalMoves();
+                System.out.println("AI posssible moves:");
+                for (Pos p : poss) {
+                    System.out.printf("%d,%d ", p.x, p.y);
+                }
+                if (poss.isEmpty()) {
+                    break;
+                } else {
+                    Pos next = poss.get(random.nextInt(poss.size()));
+                    slot.setMove2(next);
+                    game.move(next.x, next.y);
+                    poss = game.getLegalMoves();
+                    if (poss.isEmpty()) {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
